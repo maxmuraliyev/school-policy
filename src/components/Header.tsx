@@ -15,8 +15,10 @@ import {
   Menu,
   X,
   Globe,
+  Send,
 } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
+import TelegramSubscribeModal from './TelegramSubscribeModal';
 
 interface LeaderboardData {
   houses: {
@@ -38,6 +40,7 @@ export default function Header() {
   const pathname = usePathname();
   const { lang, setLang, t } = useLanguage();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [telegramModalOpen, setTelegramModalOpen] = useState(false);
   const [scores, setScores] = useState<LeaderboardData | null>(null);
 
   // Fast score loading: fetch once on mount and refresh every 60 seconds (Issue 5: performance)
@@ -200,6 +203,33 @@ export default function Header() {
             </button>
           </div>
 
+          {/* Telegram Alerts Trigger */}
+          <button
+            type="button"
+            onClick={() => setTelegramModalOpen(true)}
+            title={lang === 'uz' ? 'Telegram bildirishnomalari' : 'Telegram Notifications'}
+            aria-label="Telegram notifications"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              background: 'rgba(0, 136, 204, 0.12)',
+              border: '1px solid rgba(0, 136, 204, 0.35)',
+              color: '#38bdf8',
+              borderRadius: 'var(--radius-full)',
+              padding: '0.3rem 0.65rem',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all var(--transition-fast)',
+            }}
+          >
+            <Send size={13} />
+            <span className="hidden sm:inline">
+              {lang === 'uz' ? 'Bot' : 'Bot'}
+            </span>
+          </button>
+
           {/* Mobile Menu Hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -305,8 +335,39 @@ export default function Header() {
               <span>{item.label}</span>
             </Link>
           ))}
+
+          {/* Telegram Mobile Drawer Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              setTelegramModalOpen(true);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-md)',
+              color: '#38bdf8',
+              background: 'rgba(0, 136, 204, 0.12)',
+              border: '1px solid rgba(0, 136, 204, 0.35)',
+              fontWeight: 700,
+              fontSize: '0.925rem',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'left',
+              marginTop: '0.25rem',
+            }}
+          >
+            <Send size={18} />
+            <span>{lang === 'uz' ? 'Telegram bildirishnomalari' : 'Telegram Notifications'}</span>
+          </button>
         </div>
       )}
+
+      {/* Telegram Subscription Modal */}
+      <TelegramSubscribeModal isOpen={telegramModalOpen} onClose={() => setTelegramModalOpen(false)} />
     </header>
   );
 }

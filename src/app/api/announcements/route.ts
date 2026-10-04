@@ -94,6 +94,16 @@ export async function POST(req: NextRequest) {
       reason: `Created announcement "${announcement.title}" (${audienceType})`,
     });
 
+    import('@/lib/telegram').then(({ sendAnnouncementNotification }) => {
+      sendAnnouncementNotification({
+        title: announcement.title,
+        content: announcement.content,
+        audienceType: announcement.audienceType,
+        houseName: announcement.house?.name,
+        authorName: announcement.authorName,
+      }).catch((err) => console.error('Telegram announcement notification error:', err));
+    }).catch(() => {});
+
     return NextResponse.json({ success: true, announcement });
   } catch (error: unknown) {
     console.error('Announcement create error:', error);

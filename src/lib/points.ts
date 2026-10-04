@@ -316,6 +316,24 @@ export async function approveTransaction(
     reason: `Approved ${tx.points} points for ${tx.house.name}: ${tx.reason}`,
   });
 
+  import('@/lib/telegram').then(async ({ sendPointAwardedNotification }) => {
+    try {
+      const student = tx.studentId ? await prisma.student.findUnique({ where: { id: tx.studentId } }) : null;
+      const category = tx.categoryId ? await prisma.category.findUnique({ where: { id: tx.categoryId } }) : null;
+      sendPointAwardedNotification({
+        points: tx.points,
+        houseName: tx.house.name,
+        houseSlug: tx.house.slug,
+        studentName: student ? `${student.firstName} ${student.lastName}` : null,
+        categoryName: category?.name,
+        reason: tx.reason,
+        approvedByName: approver.name,
+      }).catch((err) => console.error('Telegram notification error:', err));
+    } catch {
+      // ignore async notification failures
+    }
+  }).catch(() => {});
+
   return updated;
 }
 

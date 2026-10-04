@@ -4,6 +4,8 @@ import { getSessionUser } from '@/lib/auth';
 import { generateTransactionCode, getActiveSeason } from '@/lib/points';
 import { logAuditEvent } from '@/lib/audit';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

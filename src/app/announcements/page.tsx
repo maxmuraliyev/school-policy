@@ -5,7 +5,9 @@ import prisma from '@/lib/prisma';
 import SectionHeader from '@/components/SectionHeader';
 import HouseBadge from '@/components/HouseBadge';
 import EmptyState from '@/components/EmptyState';
+import TelegramBanner from '@/components/TelegramBanner';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AnnouncementsPage() {
@@ -22,6 +24,8 @@ export default async function AnnouncementsPage() {
         title="House System Announcements"
         description="Official communiqués from the School Principal, House Masters, and student leadership."
       />
+
+      <TelegramBanner />
 
       {announcements.length === 0 ? (
         <EmptyState

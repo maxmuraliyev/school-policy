@@ -1,7 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Trophy, ShieldCheck, Save, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
+import {
+  Settings,
+  Trophy,
+  ShieldCheck,
+  Save,
+  CheckCircle2,
+  AlertCircle,
+  Lock,
+  Send,
+  Trash2,
+  RefreshCw,
+  Radio,
+  ExternalLink,
+} from 'lucide-react';
 
 interface SettingItem {
   id: string;
@@ -19,6 +32,17 @@ interface SeasonItem {
   endsAt: string;
 }
 
+interface TelegramSubscriberItem {
+  id: string;
+  chatId: string;
+  telegramUsername: string | null;
+  name: string | null;
+  subscribedToPoints: boolean;
+  subscribedToAnnouncements: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<SettingItem[]>([]);
   const [seasons, setSeasons] = useState<SeasonItem[]>([]);
@@ -27,15 +51,39 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Form values
+  // General settings
   const [schoolName, setSchoolName] = useState('');
   const [trophyTitle, setTrophyTitle] = useState('');
   const [seniorThreshold, setSeniorThreshold] = useState('50');
   const [selfApprovalAllowed, setSelfApprovalAllowed] = useState('false');
 
+  // Telegram settings
+  const [botToken, setBotToken] = useState('');
+  const [botUsername, setBotUsername] = useState('');
+  const [channelId, setChannelId] = useState('');
+  const [telegramEnabled, setTelegramEnabled] = useState(true);
+  const [subscribers, setSubscribers] = useState<TelegramSubscriberItem[]>([]);
+  const [testChatId, setTestChatId] = useState('');
+  const [testingTelegram, setTestingTelegram] = useState(false);
+  const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Season finalization
   const [selectedWinnerHouse, setSelectedWinnerHouse] = useState('');
   const [finalizing, setFinalizing] = useState(false);
+
+  const fetchTelegramData = () => {
+    fetch('/api/admin/telegram')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.subscribers) setSubscribers(data.subscribers);
+        if (data.config) {
+          if (data.config.botUsername) setBotUsername(data.config.botUsername);
+          if (data.config.channelId) setChannelId(data.config.channelId);
+          setTelegramEnabled(data.config.isEnabled);
+        }
+      })
+      .catch((err) => console.error('Failed to load telegram admin data:', err));
+  };
 
   useEffect(() => {
     fetch('/api/admin/settings')
@@ -49,6 +97,12 @@ export default function AdminSettingsPage() {
           setTrophyTitle(getVal('trophy_title', 'The Silver & Gold House Chalice'));
           setSeniorThreshold(getVal('senior_approval_threshold', '50'));
           setSelfApprovalAllowed(getVal('self_approval_allowed', 'false'));
+
+          // Load stored Telegram settings
+          setBotToken(getVal('telegram_bot_token', ''));
+          setBotUsername(getVal('telegram_bot_username', ''));
+          setChannelId(getVal('telegram_channel_id', ''));
+          setTelegramEnabled(getVal('telegram_notifications_enabled', 'true') === 'true');
         }
         if (data.seasons) setSeasons(data.seasons);
         setLoading(false);
@@ -62,6 +116,8 @@ export default function AdminSettingsPage() {
           if (data.houses.length > 0) setSelectedWinnerHouse(data.houses[0].id);
         }
       });
+
+    fetchTelegramData();
   }, []);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -70,6 +126,7 @@ export default function AdminSettingsPage() {
     setMsg(null);
 
     try {
+      // 1. Save general settings
       const res = await fetch('/api/admin/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -83,19 +140,71 @@ export default function AdminSettingsPage() {
         }),
       });
 
-      const data = await res.json();
+      // 2. Save Telegram settings
+      await fetch('/api/admin/telegram', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botToken,
+          botUsername,
+          channelId,
+          isEnabled: telegramEnabled,
+        }),
+      });
 
+      const data = await res.json();
       if (!res.ok) {
         setMsg({ type: 'error', text: data.error || 'Failed to update settings' });
         setSaving(false);
         return;
       }
 
-      setMsg({ type: 'success', text: 'System settings saved and logged to audit trail.' });
+      setMsg({ type: 'success', text: 'All system and Telegram settings saved successfully.' });
       setSaving(false);
+      fetchTelegramData();
     } catch {
       setMsg({ type: 'error', text: 'Network error saving settings.' });
       setSaving(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setTestingTelegram(true);
+    setTestResult(null);
+
+    try {
+      const res = await fetch('/api/admin/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'TEST_PING',
+          targetChatId: testChatId.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setTestResult({ type: 'error', text: data.error || 'Failed to send test ping' });
+      } else {
+        setTestResult({ type: 'success', text: 'Test message sent successfully to Telegram!' });
+      }
+    } catch {
+      setTestResult({ type: 'error', text: 'Network error communicating with Telegram.' });
+    } finally {
+      setTestingTelegram(false);
+    }
+  };
+
+  const handleDeleteSubscriber = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this Telegram subscriber?')) return;
+
+    try {
+      const res = await fetch(`/api/admin/telegram?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSubscribers((prev) => prev.filter((s) => s.id !== id));
+      }
+    } catch (err) {
+      console.error('Failed to delete subscriber:', err);
     }
   };
 
@@ -138,34 +247,32 @@ export default function AdminSettingsPage() {
         text: `Official House Cup Finalized! ${winnerName} has been recorded in the permanent institutional annals.`,
       });
       setFinalizing(false);
-
-      // Refresh seasons
-      fetch('/api/admin/settings')
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.seasons) setSeasons(d.seasons);
-        });
+      window.location.reload();
     } catch {
-      setMsg({ type: 'error', text: 'Network error during season finalization.' });
+      setMsg({ type: 'error', text: 'Network error finalizing season' });
       setFinalizing(false);
     }
   };
 
   if (loading) {
-    return <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading settings...</div>;
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-muted)' }}>
+        Loading institutional settings...
+      </div>
+    );
   }
 
   const activeSeason = seasons.find((s) => s.status === 'ACTIVE');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      {/* Header */}
       <div>
-        <span className="badge badge-gold" style={{ marginBottom: '0.5rem' }}>
-          CONFIGURATION & SEASONS
-        </span>
-        <h1 style={{ fontSize: '2.25rem', color: '#fff' }}>System Settings & Governance</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-          Manage global institution parameters, approval thresholds, and annual House Cup finalization.
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 800 }}>
+          System & Telegram Settings
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          Configure institutional governance, scoring validation policies, Telegram bot alerts, and season lifecycles.
         </p>
       </div>
 
@@ -174,109 +281,299 @@ export default function AdminSettingsPage() {
           style={{
             padding: '1rem',
             borderRadius: 'var(--radius-md)',
-            background: msg.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-            border: `1px solid ${msg.type === 'success' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
-            color: msg.type === 'success' ? '#6ee7b7' : '#fca5a5',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
-            fontSize: '0.9rem',
+            gap: '0.75rem',
+            background: msg.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            border: `1px solid ${msg.type === 'success' ? 'var(--terra-primary)' : 'var(--danger)'}`,
+            color: msg.type === 'success' ? '#10b981' : '#ef4444',
           }}
         >
           {msg.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-          <span>{msg.text}</span>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{msg.text}</div>
         </div>
       )}
 
-      {/* CORE SETTINGS FORM */}
-      <form onSubmit={handleSaveSettings} className="glass-card" style={{ padding: '2rem' }}>
-        <h2 style={{ fontSize: '1.35rem', color: '#fff', marginBottom: '1.25rem' }}>General School Parameters</h2>
+      {/* Settings Form */}
+      <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        {/* Core Institutional Branding */}
+        <section className="admin-card" style={{ padding: '1.75rem' }}>
+          <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Settings size={18} color="var(--school-blue-light)" />
+            <span>Institutional Identity</span>
+          </h2>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
-          <div className="form-group">
-            <label className="form-label">School / Institution Name</label>
-            <input
-              type="text"
-              required
-              value={schoolName}
-              onChange={(e) => setSchoolName(e.target.value)}
-              className="form-input"
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+            <div>
+              <label className="form-label">School Name</label>
+              <input
+                type="text"
+                value={schoolName}
+                onChange={(e) => setSchoolName(e.target.value)}
+                className="form-input"
+                placeholder="Angren Ixtisoslashtirilgan Maktabi"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="form-label">Championship Trophy Title</label>
+              <input
+                type="text"
+                value={trophyTitle}
+                onChange={(e) => setTrophyTitle(e.target.value)}
+                className="form-input"
+                placeholder="Annual House Trophy"
+                required
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Telegram Bot & Notification Broadcast Settings */}
+        <section className="admin-card" style={{ padding: '1.75rem', border: '1px solid rgba(0, 136, 204, 0.3)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0088cc' }}>
+              <Send size={18} />
+              <span>Telegram Bot & Live Notification System</span>
+            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label className="form-label" style={{ margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input
+                  type="checkbox"
+                  checked={telegramEnabled}
+                  onChange={(e) => setTelegramEnabled(e.target.checked)}
+                  style={{ accentColor: '#0088cc', width: '16px', height: '16px' }}
+                />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Enable Live Alerts</span>
+              </label>
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Annual Trophy Title</label>
-            <input
-              type="text"
-              required
-              value={trophyTitle}
-              onChange={(e) => setTrophyTitle(e.target.value)}
-              className="form-input"
-            />
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+            Whenever points are awarded or school announcements are published, the Telegram Bot will automatically broadcast alerts to all subscribed students and teachers.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
+            <div>
+              <label className="form-label">Telegram Bot API Token</label>
+              <input
+                type="password"
+                value={botToken}
+                onChange={(e) => setBotToken(e.target.value)}
+                className="form-input"
+                placeholder="123456789:ABCdefGhIJKlmNoPQRstuv..."
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Obtain from @BotFather on Telegram. Leave empty if using .env.
+              </span>
+            </div>
+
+            <div>
+              <label className="form-label">Telegram Bot Username</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  value={botUsername}
+                  onChange={(e) => setBotUsername(e.target.value)}
+                  className="form-input"
+                  placeholder="AngrenHouseBot"
+                />
+              </div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Without @ symbol. Allows students to open your bot with 1 click.
+              </span>
+            </div>
+
+            <div>
+              <label className="form-label">Fallback Broadcast Channel ID (Optional)</label>
+              <input
+                type="text"
+                value={channelId}
+                onChange={(e) => setChannelId(e.target.value)}
+                className="form-input"
+                placeholder="@angren_houses or -1001234567890"
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Public channel username or group ID for general school announcements.
+              </span>
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Senior Admin Approval Threshold (Points)</label>
-            <input
-              type="number"
-              required
-              min="10"
-              max="200"
-              value={seniorThreshold}
-              onChange={(e) => setSeniorThreshold(e.target.value)}
-              className="form-input"
-            />
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Submissions above this value strictly require Administrator approval.
-            </span>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Allow Self-Approval for Faculty</label>
-            <select
-              value={selfApprovalAllowed}
-              onChange={(e) => setSelfApprovalAllowed(e.target.value)}
-              className="form-select"
-            >
-              <option value="false">Strict False (Forbidden per PRD Section 74)</option>
-              <option value="true">Allowed (Relaxed rule)</option>
-            </select>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button type="submit" disabled={saving} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <Save size={16} />
-            <span>{saving ? 'Saving...' : 'Save Configuration'}</span>
-          </button>
-        </div>
-      </form>
-
-      {/* PRD Section 81: ANNUAL HOUSE CUP FINALIZATION */}
-      <section className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--gold)', marginBottom: '1rem' }}>
-          <Trophy size={24} />
-          <h2 style={{ fontSize: '1.4rem', color: '#fff' }}>Annual House Cup Finalization</h2>
-        </div>
-
-        <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, fontSize: '0.925rem', marginBottom: '1.5rem', maxWidth: '850px' }}>
-          Per <strong>PRD Section 81</strong>, the school administration may officially finalize the academic season. Finalizing archives the season, locks score mutations, records the champion house, and preserves the historical leaderboards forever.
-        </p>
-
-        {activeSeason ? (
+          {/* Test Telegram Ping */}
           <div
             style={{
               padding: '1.25rem',
               borderRadius: 'var(--radius-md)',
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid var(--border-subtle)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '1rem',
+              background: 'rgba(0, 136, 204, 0.05)',
+              border: '1px solid rgba(0, 136, 204, 0.2)',
+              marginBottom: '1.5rem',
             }}
           >
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.5rem', color: '#93c5fd' }}>
+              Test Telegram Connection
+            </h3>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={testChatId}
+                onChange={(e) => setTestChatId(e.target.value)}
+                className="form-input"
+                placeholder="Enter Chat ID or Username (e.g. 123456789 or @username)"
+                style={{ flex: 1, minWidth: '220px' }}
+              />
+              <button
+                type="button"
+                onClick={handleTestTelegram}
+                disabled={testingTelegram || !botToken}
+                className="btn btn-secondary"
+                style={{
+                  background: 'rgba(0, 136, 204, 0.2)',
+                  borderColor: 'rgba(0, 136, 204, 0.4)',
+                  color: '#ffffff',
+                }}
+              >
+                {testingTelegram ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}
+                <span>Send Test Ping</span>
+              </button>
+            </div>
+
+            {testResult && (
+              <div
+                style={{
+                  marginTop: '0.75rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: testResult.type === 'success' ? '#10b981' : '#ef4444',
+                }}
+              >
+                {testResult.text}
+              </div>
+            )}
+          </div>
+
+          {/* Subscribers Table */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700 }}>
+                Active Subscribers ({subscribers.length})
+              </h3>
+              <button
+                type="button"
+                onClick={fetchTelegramData}
+                className="btn btn-secondary btn-sm"
+                style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+              >
+                <RefreshCw size={12} />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            {subscribers.length === 0 ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                No students or users have subscribed yet.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table" style={{ width: '100%', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr>
+                      <th>Telegram User / ID</th>
+                      <th>Name</th>
+                      <th>Points</th>
+                      <th>Announcements</th>
+                      <th>Joined</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subscribers.map((sub) => (
+                      <tr key={sub.id}>
+                        <td>
+                          <strong>{sub.telegramUsername ? `@${sub.telegramUsername}` : sub.chatId}</strong>
+                        </td>
+                        <td>{sub.name || '—'}</td>
+                        <td>{sub.subscribedToPoints ? '✅' : '❌'}</td>
+                        <td>{sub.subscribedToAnnouncements ? '✅' : '❌'}</td>
+                        <td>{new Date(sub.createdAt).toLocaleDateString()}</td>
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSubscriber(sub.id)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--danger)',
+                              cursor: 'pointer',
+                              padding: '0.2rem',
+                            }}
+                            title="Remove subscriber"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Governance & Integrity Rules */}
+        <section className="admin-card" style={{ padding: '1.75rem' }}>
+          <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ShieldCheck size={18} color="var(--gold)" />
+            <span>Integrity & Approval Safeguards</span>
+          </h2>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+            <div>
+              <label className="form-label">Self-Approval Fairness Policy</label>
+              <select
+                value={selfApprovalAllowed}
+                onChange={(e) => setSelfApprovalAllowed(e.target.value)}
+                className="form-select"
+              >
+                <option value="false">Strict: Require 4-Eye Review (No Self-Approval)</option>
+                <option value="true">Permissive: Teachers may approve own submissions</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="form-label">High-Impact Verification Threshold (Pts)</label>
+              <input
+                type="number"
+                value={seniorThreshold}
+                onChange={(e) => setSeniorThreshold(e.target.value)}
+                className="form-input"
+                min="10"
+                max="500"
+                required
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Save Bar */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="submit" disabled={saving} className="btn btn-primary" style={{ padding: '0.75rem 1.75rem' }}>
+            <Save size={16} />
+            <span>{saving ? 'Saving...' : 'Save All Settings'}</span>
+          </button>
+        </div>
+      </form>
+
+      {/* Season Finalization Section */}
+      <section className="admin-card" style={{ padding: '1.75rem', marginTop: '1rem', borderTop: '3px solid var(--gold)' }}>
+        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--gold)' }}>
+          <Trophy size={18} />
+          <span>Annual Championship Finalization</span>
+        </h2>
+
+        {activeSeason ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div>
               <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>
                 Active Season Underway

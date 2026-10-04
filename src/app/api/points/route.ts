@@ -192,15 +192,19 @@ export async function POST(req: NextRequest) {
 
     invalidateScoreCache();
 
-    await logAuditEvent({
-      userId: user.id,
-      userName: user.name,
-      action: 'POINT_CREATE',
-      entityType: 'PointTransaction',
-      entityId: transaction.id,
-      newData: transaction,
-      reason: `Submitted ${numericPoints} points for ${house.name}: ${reason} [Status: ${initialStatus}]`,
-    });
+    if (initialStatus === 'APPROVED') {
+      import('@/lib/telegram').then(({ sendPointAwardedNotification }) => {
+        sendPointAwardedNotification({
+          points: numericPoints,
+          houseName: house.name,
+          houseSlug: house.slug,
+          studentName: transaction.student ? `${transaction.student.firstName} ${transaction.student.lastName}` : null,
+          categoryName: transaction.category?.name,
+          reason: transaction.reason,
+          approvedByName: approvedByName || user.name,
+        }).catch((err) => console.error('Telegram notification error:', err));
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ success: true, transaction });
   } catch (error: unknown) {
