@@ -105,7 +105,10 @@ export async function broadcastToSubscribers(options: {
 }) {
   try {
     const config = await getTelegramConfig();
+    console.log(`[Telegram] Broadcast triggered for topic: ${options.topic}. Bot Token configured: ${Boolean(config.botToken)}, Enabled: ${config.isEnabled}`);
+
     if (!config.isEnabled || !config.botToken) {
+      console.warn('[Telegram] Notification skipped: TELEGRAM_BOT_TOKEN is not configured in .env or Admin Settings.');
       return { sentCount: 0, reason: 'Telegram notifications disabled or token not set' };
     }
 
@@ -128,6 +131,12 @@ export async function broadcastToSubscribers(options: {
     // Include broadcast channel if configured
     if (config.channelId) {
       recipients.add(config.channelId);
+    }
+
+    console.log(`[Telegram] Target recipients count: ${recipients.size} (${subscribers.length} subscribers${config.channelId ? ' + 1 channel' : ''})`);
+
+    if (recipients.size === 0) {
+      console.warn('[Telegram] No subscribers found! Users must subscribe with their Telegram Chat ID / Username on the website.');
     }
 
     for (const chatId of recipients) {
