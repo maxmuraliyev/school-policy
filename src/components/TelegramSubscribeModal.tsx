@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Send, CheckCircle2, AlertCircle, X, Bell, ExternalLink, ShieldCheck } from 'lucide-react';
+import { Send, CheckCircle2, AlertCircle, X, ExternalLink } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 
 interface TelegramSubscribeModalProps {
@@ -89,30 +89,27 @@ export default function TelegramSubscribeModal({ isOpen, onClose }: TelegramSubs
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-[var(--surface-color)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-6 sm:p-8 overflow-hidden text-[var(--foreground)]">
-        {/* Glow accent */}
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#0088cc]/20 rounded-full blur-3xl pointer-events-none" />
-
+    <div className="telegram-modal-backdrop" onClick={onClose}>
+      <div className="telegram-modal-dialog" onClick={(e) => e.stopPropagation()}>
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+          className="telegram-modal-close"
           aria-label="Close"
         >
           <X size={20} />
         </button>
 
         {/* Header */}
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-12 h-12 rounded-xl bg-[#0088cc]/10 border border-[#0088cc]/30 flex items-center justify-center text-[#0088cc]">
-            <Send size={24} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1.25rem' }}>
+          <div className="telegram-icon-box" style={{ width: '46px', height: '46px' }}>
+            <Send size={22} />
           </div>
           <div>
-            <h3 className="text-xl font-bold tracking-tight">
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
               {isUz ? 'Telegram bildirishnomalari' : 'Telegram Notifications'}
             </h3>
-            <p className="text-xs sm:text-sm text-zinc-400">
+            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', margin: '0.15rem 0 0 0' }}>
               {isUz
                 ? 'House tizimi yangiliklari va ochkolarni bir zumda oling'
                 : 'Receive instant house points and school news alerts'}
@@ -122,19 +119,43 @@ export default function TelegramSubscribeModal({ isOpen, onClose }: TelegramSubs
 
         {/* Direct bot link if configured */}
         {botInfo?.botUsername && (
-          <div className="mb-5 p-3.5 bg-[#0088cc]/10 border border-[#0088cc]/25 rounded-xl flex items-center justify-between gap-3 text-xs sm:text-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-md)',
+              background: 'rgba(0, 136, 204, 0.1)',
+              border: '1px solid rgba(0, 136, 204, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+              marginBottom: '1.25rem',
+              fontSize: '0.85rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
               <span>
-                {isUz ? 'Rasmiy Telegram botimiz:' : 'Our Official Telegram Bot:'}{' '}
-                <strong className="text-[#0088cc]">@{botInfo.botUsername}</strong>
+                {isUz ? 'Rasmiy Telegram botimiz:' : 'Our Official Bot:'}{' '}
+                <strong style={{ color: '#38bdf8' }}>@{botInfo.botUsername}</strong>
               </span>
             </div>
             <a
               href={`https://t.me/${botInfo.botUsername}?start=subscribe`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#0088cc] hover:bg-[#0077b3] text-white font-medium rounded-lg text-xs transition-colors shrink-0"
+              className="btn btn-sm"
+              style={{
+                background: '#0088cc',
+                color: '#ffffff',
+                border: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.75rem',
+                textDecoration: 'none',
+                padding: '0.35rem 0.65rem',
+              }}
             >
               <span>{isUz ? 'Botni ochish' : 'Open Bot'}</span>
               <ExternalLink size={12} />
@@ -144,34 +165,42 @@ export default function TelegramSubscribeModal({ isOpen, onClose }: TelegramSubs
 
         {status && (
           <div
-            className={`mb-5 p-4 rounded-xl flex items-start gap-3 text-sm ${
-              status.type === 'success'
-                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
-            }`}
+            style={{
+              padding: '0.85rem 1rem',
+              borderRadius: 'var(--radius-md)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.65rem',
+              fontSize: '0.875rem',
+              marginBottom: '1.25rem',
+              background: status.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              border: `1px solid ${status.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+              color: status.type === 'success' ? '#34d399' : '#f87171',
+            }}
           >
             {status.type === 'success' ? (
-              <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+              <CheckCircle2 size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
             ) : (
-              <AlertCircle size={18} className="shrink-0 mt-0.5" />
+              <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
             )}
-            <p>{status.message}</p>
+            <div>{status.message}</div>
           </div>
         )}
 
         {status?.type === 'success' ? (
-          <div className="flex flex-col gap-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <button
               onClick={onClose}
-              className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-all"
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '0.75rem' }}
             >
               {isUz ? 'Yopish' : 'Close'}
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
+              <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '0.35rem' }}>
                 {isUz ? 'Telegram Username yoki Chat ID *' : 'Telegram Username or Chat ID *'}
               </label>
               <input
@@ -179,18 +208,18 @@ export default function TelegramSubscribeModal({ isOpen, onClose }: TelegramSubs
                 value={telegramHandle}
                 onChange={(e) => setTelegramHandle(e.target.value)}
                 placeholder="@username yoki 123456789"
-                className="w-full px-3.5 py-2.5 bg-black/30 border border-zinc-700 focus:border-[#0088cc] focus:ring-1 focus:ring-[#0088cc] rounded-xl text-sm text-white placeholder-zinc-500 transition-all outline-none"
+                className="form-input"
                 required
               />
-              <p className="mt-1 text-[11px] text-zinc-400">
+              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
                 {isUz
                   ? "Botga /start bosing yoki o'z Telegram ID'ingizni @userinfobot orqali oling"
                   : 'Start the bot or find your numeric Telegram ID via @userinfobot'}
-              </p>
+              </span>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
+              <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '0.35rem' }}>
                 {isUz ? 'Ismingiz (Ixtiyoriy)' : 'Your Name (Optional)'}
               </label>
               <input
@@ -198,52 +227,64 @@ export default function TelegramSubscribeModal({ isOpen, onClose }: TelegramSubs
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={isUz ? "Masalan: Jamshidbek" : "E.g. Jamshidbek"}
-                className="w-full px-3.5 py-2.5 bg-black/30 border border-zinc-700 focus:border-[#0088cc] focus:ring-1 focus:ring-[#0088cc] rounded-xl text-sm text-white placeholder-zinc-500 transition-all outline-none"
+                className="form-input"
               />
             </div>
 
-            <div className="p-3.5 bg-black/20 border border-zinc-800 rounded-xl space-y-2.5">
-              <span className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+            <div
+              style={{
+                padding: '0.85rem 1rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid var(--border-subtle)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem',
+              }}
+            >
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                 {isUz ? 'Qaysi xabarlar kerak?' : 'Notification Topics'}
               </span>
 
-              <label className="flex items-center gap-3 text-sm cursor-pointer select-none">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.875rem', cursor: 'pointer', userSelect: 'none' }}>
                 <input
                   type="checkbox"
                   checked={subPoints}
                   onChange={(e) => setSubPoints(e.target.checked)}
-                  className="rounded border-zinc-700 text-[#0088cc] focus:ring-[#0088cc] w-4 h-4 bg-zinc-900"
+                  style={{ accentColor: '#0088cc', width: '16px', height: '16px' }}
                 />
-                <span className="text-zinc-200">
+                <span style={{ color: 'var(--text-primary)' }}>
                   {isUz ? 'Yangi berilgan ballar (Points)' : 'Point updates & awards'}
                 </span>
               </label>
 
-              <label className="flex items-center gap-3 text-sm cursor-pointer select-none">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.875rem', cursor: 'pointer', userSelect: 'none' }}>
                 <input
                   type="checkbox"
                   checked={subAnnouncements}
                   onChange={(e) => setSubAnnouncements(e.target.checked)}
-                  className="rounded border-zinc-700 text-[#0088cc] focus:ring-[#0088cc] w-4 h-4 bg-zinc-900"
+                  style={{ accentColor: '#0088cc', width: '16px', height: '16px' }}
                 />
-                <span className="text-zinc-200">
+                <span style={{ color: 'var(--text-primary)' }}>
                   {isUz ? 'Maktab e\'lonlari va yangiliklar' : 'School announcements & news'}
                 </span>
               </label>
             </div>
 
-            <div className="pt-2 flex items-center justify-end gap-3">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+                className="btn btn-secondary"
+                style={{ padding: '0.65rem 1.25rem' }}
               >
                 {isUz ? 'Bekor qilish' : 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-5 py-2.5 bg-[#0088cc] hover:bg-[#0077b3] disabled:opacity-50 text-white font-semibold text-sm rounded-xl transition-all shadow-lg shadow-[#0088cc]/20 flex items-center gap-2"
+                className="telegram-btn-primary"
+                style={{ padding: '0.65rem 1.25rem' }}
               >
                 {loading ? (
                   <span>{isUz ? 'Saqlanmoqda...' : 'Subscribing...'}</span>
