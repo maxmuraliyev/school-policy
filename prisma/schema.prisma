@@ -1,0 +1,381 @@
+// Prisma schema for School House System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Season {
+  id              String             @id @default(cuid())
+  name            String             @unique // e.g. "2026-2027"
+  startsAt        DateTime
+  endsAt          DateTime
+  status          String             @default("ACTIVE") // ACTIVE, ARCHIVED, UPCOMING
+  winningHouseId  String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  competitions    Competition[]
+  transactions    PointTransaction[]
+  events          Event[]
+}
+
+model House {
+  id              String             @id @default(cuid())
+  name            String             @unique // "Astra House", "Terra House"
+  slug            String             @unique // "astra", "terra"
+  shortName       String             // "Astra", "Terra"
+  description     String
+  motto           String             // e.g. "Aim Beyond", "Stronger Together"
+  symbol          String             // e.g. "Falcon", "Wolf"
+  logoUrl         String?
+  primaryColor    String             // e.g. "#6366F1" (indigo) / "#10B981" (emerald)
+  secondaryColor  String             // e.g. "#4F46E5" / "#059669"
+  accentColor     String             @default("#F59E0B")
+  bgGradient      String             @default("linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)")
+  mentorName      String?
+  mentorTitle     String?
+  captainName     String?
+  viceCaptainName String?
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  students        Student[]
+  transactions    PointTransaction[]
+  participants    CompetitionParticipant[]
+  results         CompetitionResult[]
+  teams           Team[]
+  achievements    Achievement[]
+  announcements   Announcement[]
+  events          Event[]
+}
+
+model Student {
+  id                String             @id @default(cuid())
+  studentCode       String             @unique // e.g. "STU-1001"
+  firstName         String
+  lastName          String
+  grade             Int                // 9, 10, 11, etc.
+  className         String             // "10A", "11B"
+  houseId           String
+  house             House              @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  photoUrl          String?
+  bio               String?
+  profileVisibility String             @default("PUBLIC") // PUBLIC, SCHOOL_ONLY, HIDDEN
+  status            String             @default("ACTIVE") // ACTIVE, GRADUATED, ARCHIVED
+  joinedAt          DateTime           @default(now())
+  graduationYear    Int?
+  archivedAt        DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  transactions      PointTransaction[]
+  participants      CompetitionParticipant[]
+  results           CompetitionResult[]
+  teamMembers       TeamMember[]
+  achievements      Achievement[]
+}
+
+model User {
+  id                  String             @id @default(cuid())
+  username            String             @unique
+  email               String             @unique
+  passwordHash        String
+  name                String
+  roleName            String             @default("TEACHER") // SUPER_ADMIN, ADMIN, TEACHER, HOUSE_MENTOR, HOUSE_CAPTAIN
+  houseId             String?
+  failedLoginAttempts Int                @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  createdPoints       PointTransaction[] @relation("PointsCreated")
+  approvedPoints      PointTransaction[] @relation("PointsApproved")
+  auditLogs           AuditLog[]
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique // SUPER_ADMIN, ADMIN, TEACHER, HOUSE_MENTOR, HOUSE_CAPTAIN
+  displayName String
+  description String
+  isSystem    Boolean          @default(false)
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  code        String           @unique // e.g. "point.approve"
+  name        String
+  category    String           // "points", "students", "competitions", "system"
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Category {
+  id           String             @id @default(cuid())
+  name         String             @unique // "Academics", "Sports", etc.
+  slug         String             @unique
+  description  String
+  icon         String             @default("Award") // Lucide icon name
+  color        String             @default("#3B82F6")
+  displayOrder Int                @default(0)
+  isActive     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  transactions PointTransaction[]
+  competitions Competition[]
+  achievements Achievement[]
+  scoringRules ScoringRule[]
+  events       Event[]
+}
+
+model ScoringRule {
+  id            String    @id @default(cuid())
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name          String    // e.g. "1st Place - School Level", "Participation"
+  level         String    @default("SCHOOL") // SCHOOL, CITY, REGIONAL, NATIONAL, INTERNATIONAL
+  place         String    @default("CUSTOM") // 1ST, 2ND, 3RD, PARTICIPATION, CUSTOM
+  defaultPoints Int
+  description   String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model PointTransaction {
+  id              String            @id @default(cuid())
+  transactionCode String            @unique // e.g. "PT-000101"
+  houseId         String
+  house           House             @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  studentId       String?
+  student         Student?          @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  teamId          String?
+  team            Team?             @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  competitionId   String?
+  competition     Competition?      @relation(fields: [competitionId], references: [id], onDelete: SetNull)
+  achievementId   String?
+  achievement     Achievement?      @relation(fields: [achievementId], references: [id], onDelete: SetNull)
+  categoryId      String
+  category        Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  points          Int
+  reason          String
+  description     String?
+  earnedAt        DateTime          @default(now())
+  createdById     String?
+  createdBy       User?             @relation("PointsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName   String
+  approvedById    String?
+  approvedBy      User?             @relation("PointsApproved", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedByName  String?
+  status          String            @default("PENDING") // DRAFT, PENDING, APPROVED, REJECTED, REVERSED
+  reversalOfId    String?           @unique
+  reversalOf      PointTransaction? @relation("TransactionReversal", fields: [reversalOfId], references: [id])
+  reversedBy      PointTransaction? @relation("TransactionReversal")
+  evidenceUrl     String?
+  internalNotes   String?
+  seasonId        String
+  season          Season            @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  approvedAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model Competition {
+  id                  String                   @id @default(cuid())
+  title               String
+  slug                String                   @unique
+  description         String
+  categoryId          String
+  category            Category                 @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  competitionType     String                   @default("INTER_HOUSE") // INTER_HOUSE, INDIVIDUAL, TOURNAMENT, QUIZ, OLYMPIAD, SPORTS, DEBATE, TECH, CREATIVE, SERVICE
+  format              String                   @default("INDIVIDUAL") // INDIVIDUAL, TEAM
+  organizer           String
+  venue               String
+  registrationOpenAt  DateTime?
+  registrationCloseAt DateTime?
+  startsAt            DateTime
+  endsAt              DateTime
+  rules               String?
+  status              String                   @default("REGISTRATION_OPEN") // DRAFT, REGISTRATION_OPEN, REGISTRATION_CLOSED, ONGOING, COMPLETED, CANCELLED, ARCHIVED
+  bannerUrl           String?
+  maxParticipants     Int?
+  seasonId            String
+  season              Season                   @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  createdById         String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  participants        CompetitionParticipant[]
+  results             CompetitionResult[]
+  transactions        PointTransaction[]
+  teams               Team[]
+}
+
+model CompetitionParticipant {
+  id            String      @id @default(cuid())
+  competitionId String
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  studentId     String?
+  student       Student?    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teamId        String?
+  team          Team?       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  houseId       String
+  house         House       @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  status        String      @default("CONFIRMED") // REGISTERED, CONFIRMED, ATTENDED, DISQUALIFIED
+  registeredAt  DateTime    @default(now())
+  notes         String?
+}
+
+model CompetitionResult {
+  id            String      @id @default(cuid())
+  competitionId String
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  studentId     String?
+  student       Student?    @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  teamId        String?
+  team          Team?       @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  houseId       String
+  house         House       @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  rank          Int         // 1, 2, 3, etc.
+  scoreText     String?     // e.g. "98/100", "Gold Medal", "Won 3-1"
+  pointsAwarded Int         @default(0)
+  status        String      @default("OFFICIAL") // OFFICIAL, PENDING_APPROVAL, CORRECTED
+  notes         String?
+  verifiedById  String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Team {
+  id            String                   @id @default(cuid())
+  name          String
+  houseId       String
+  house         House                    @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  competitionId String?
+  competition   Competition?             @relation(fields: [competitionId], references: [id], onDelete: SetNull)
+  captainId     String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  members       TeamMember[]
+  transactions  PointTransaction[]
+  participants  CompetitionParticipant[]
+  results       CompetitionResult[]
+  achievements  Achievement[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  role      String   @default("MEMBER") // CAPTAIN, MEMBER
+  joinedAt  DateTime @default(now())
+}
+
+model Achievement {
+  id              String             @id @default(cuid())
+  studentId       String?
+  student         Student?           @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  teamId          String?
+  team            Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  houseId         String
+  house           House              @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  title           String
+  description     String
+  categoryId      String
+  category        Category           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  level           String             @default("SCHOOL") // SCHOOL, CITY, REGIONAL, NATIONAL, INTERNATIONAL
+  organization    String
+  achievementDate DateTime
+  evidenceUrl     String?
+  status          String             @default("APPROVED") // PENDING, APPROVED, REJECTED
+  pointsAwarded   Int?
+  approvedById    String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  transactions    PointTransaction[]
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String
+  eventType   String    @default("COMPETITION") // COMPETITION, MEETING, HOUSE_ACTIVITY, CEREMONY, DEADLINE, SERVICE
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  houseId     String?
+  house       House?    @relation(fields: [houseId], references: [id], onDelete: SetNull)
+  venue       String
+  startsAt    DateTime
+  endsAt      DateTime
+  isPublic    Boolean   @default(true)
+  seasonId    String
+  season      Season    @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Announcement {
+  id           String    @id @default(cuid())
+  title        String
+  slug         String    @unique
+  content      String
+  audienceType String    @default("ALL") // ALL, ASTRA, TERRA
+  houseId      String?
+  house        House?    @relation(fields: [houseId], references: [id], onDelete: SetNull)
+  authorId     String?
+  authorName   String
+  status       String    @default("PUBLISHED") // PUBLISHED, DRAFT, ARCHIVED
+  isPinned     Boolean   @default(false)
+  publishedAt  DateTime  @default(now())
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName   String
+  action     String   // POINT_CREATE, POINT_APPROVE, POINT_REVERSE, STUDENT_TRANSFER, COMPETITION_RESULT, etc.
+  entityType String   // PointTransaction, Student, Competition, User, Season, Setting
+  entityId   String?
+  oldData    String?  // JSON string
+  newData    String?  // JSON string
+  reason     String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+}
+
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  category    String   @default("general") // general, scoring, privacy, branding
+  updatedAt   DateTime @updatedAt
+}
