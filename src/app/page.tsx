@@ -28,8 +28,86 @@ export const revalidate = 0; // Dynamic server-rendered for real-time scores
 
 export default async function HomePage() {
   const { lang, t } = await getServerI18n();
-  const season = await getActiveSeason();
-  const houses = await calculateHouseScores({ seasonId: season?.id });
+  let season = null;
+  let houses: any[] = [];
+  let recentActivities: any[] = [];
+  let upcomingCompetition: any = null;
+  let latestCompletedCompetition: any = null;
+  let announcements: any[] = [];
+  let totalStudents = 0;
+  let totalCompetitionsCount = 0;
+  let totalApprovedTxCount = 0;
+  let dbError: string | null = null;
+
+  try {
+    season = await getActiveSeason();
+    houses = await calculateHouseScores({ seasonId: season?.id });
+
+    // 1. Live approved point transactions
+    recentActivities = await prisma.pointTransaction.findMany({
+      where: {
+        status: { in: ['APPROVED', 'REVERSED'] },
+        ...(season ? { seasonId: season.id } : {}),
+      },
+      include: {
+        house: true,
+        category: true,
+        student: true,
+        competition: true,
+      },
+      orderBy: { earnedAt: 'desc' },
+      take: 6,
+    });
+
+    // 2. Upcoming featured competition
+    upcomingCompetition = await prisma.competition.findFirst({
+      where: {
+        status: { in: ['REGISTRATION_OPEN', 'ONGOING', 'REGISTRATION_CLOSED'] },
+        startsAt: { gte: new Date() },
+      },
+      include: { category: true, participants: true },
+      orderBy: { startsAt: 'asc' },
+    });
+
+    // 3. Latest completed competition with results podium
+    latestCompletedCompetition = await prisma.competition.findFirst({
+      where: { status: 'COMPLETED' },
+      include: {
+        category: true,
+        results: {
+          include: { house: true, student: true, team: true },
+          orderBy: { rank: 'asc' },
+          take: 3,
+        },
+      },
+      orderBy: { endsAt: 'desc' },
+    });
+
+    // 4. Official announcements
+    announcements = await prisma.announcement.findMany({
+      where: { status: 'PUBLISHED' },
+      include: { house: true },
+      orderBy: [{ isPinned: 'desc' }, { publishedAt: 'desc' }],
+      take: 3,
+    });
+
+    // 5. Tournament metrics
+    const [studCount, compCount, txCount] = await Promise.all([
+      prisma.student.count({ where: { status: 'ACTIVE' } }),
+      prisma.competition.count(),
+      prisma.pointTransaction.count({ where: { status: 'APPROVED' } }),
+    ]);
+    totalStudents = studCount;
+    totalCompetitionsCount = compCount;
+    totalApprovedTxCount = txCount;
+  } catch (err: unknown) {
+    console.error('Database connection error in HomePage:', err);
+    dbError = 'Database environment variables missing or unreachable';
+    houses = [
+      { id: 'h-astra', slug: 'astra', name: 'Astra House', shortName: 'Astra', totalPoints: 0, studentCount: 0, primaryColor: '#0047ba', categories: [] },
+      { id: 'h-terra', slug: 'terra', name: 'Terra House', shortName: 'Terra', totalPoints: 0, studentCount: 0, primaryColor: '#059669', categories: [] },
+    ];
+  }
 
   const astra = houses.find((h) => h.slug === 'astra') || houses[0];
   const terra = houses.find((h) => h.slug === 'terra') || houses[1];
@@ -45,63 +123,29 @@ export default async function HomePage() {
   const leadingHouse = isAstraLeading ? astra : terra;
   const trailingHouse = isAstraLeading ? terra : astra;
 
-  // 1. Live approved point transactions
-  const recentActivities = await prisma.pointTransaction.findMany({
-    where: {
-      status: { in: ['APPROVED', 'REVERSED'] },
-      ...(season ? { seasonId: season.id } : {}),
-    },
-    include: {
-      house: true,
-      category: true,
-      student: true,
-      competition: true,
-    },
-    orderBy: { earnedAt: 'desc' },
-    take: 6,
-  });
-
-  // 2. Upcoming featured competition
-  const upcomingCompetition = await prisma.competition.findFirst({
-    where: {
-      status: { in: ['REGISTRATION_OPEN', 'ONGOING', 'REGISTRATION_CLOSED'] },
-      startsAt: { gte: new Date() },
-    },
-    include: { category: true, participants: true },
-    orderBy: { startsAt: 'asc' },
-  });
-
-  // 3. Latest completed competition with results podium
-  const latestCompletedCompetition = await prisma.competition.findFirst({
-    where: { status: 'COMPLETED' },
-    include: {
-      category: true,
-      results: {
-        include: { house: true, student: true, team: true },
-        orderBy: { rank: 'asc' },
-        take: 3,
-      },
-    },
-    orderBy: { endsAt: 'desc' },
-  });
-
-  // 4. Official announcements
-  const announcements = await prisma.announcement.findMany({
-    where: { status: 'PUBLISHED' },
-    include: { house: true },
-    orderBy: [{ isPinned: 'desc' }, { publishedAt: 'desc' }],
-    take: 3,
-  });
-
-  // 5. Tournament metrics
-  const [totalStudents, totalCompetitionsCount, totalApprovedTxCount] = await Promise.all([
-    prisma.student.count({ where: { status: 'ACTIVE' } }),
-    prisma.competition.count(),
-    prisma.pointTransaction.count({ where: { status: 'APPROVED' } }),
-  ]);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '3.5rem', paddingBottom: '4rem' }}>
+      {dbError && (
+        <div className="container" style={{ paddingTop: '1.5rem' }}>
+          <div
+            style={{
+              padding: '1.25rem 1.5rem',
+              borderRadius: 'var(--radius-md)',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#fca5a5',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: 700, marginBottom: '0.35rem' }}>
+              <AlertCircle size={20} />
+              <span>Database Setup Required on Vercel</span>
+            </div>
+            <p style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.6, margin: 0 }}>
+              The application is deployed on Vercel, but <strong>DATABASE_URL</strong> is not configured yet in the Vercel Dashboard. Go to <strong>Vercel &gt; Settings &gt; Environment Variables</strong>, add <code>DATABASE_URL</code> and <code>DIRECT_URL</code> from your Supabase project, then click Redeploy.
+            </p>
+          </div>
+        </div>
+      )}
       {/* ============================================================ */}
       {/* 1. HERO BATTLE ARENA: ASTRA VS TERRA SHOWDOWN               */}
       {/* ============================================================ */}
@@ -643,13 +687,13 @@ export default async function HomePage() {
                   gap: '1.25rem',
                 }}
               >
-                {latestCompletedCompetition.results.map((result) => {
-                  const rankIcons = {
+                {latestCompletedCompetition.results.map((result: any) => {
+                  const rankIconsMap: Record<number, { icon: any; color: string; label: string }> = {
                     1: { icon: Trophy, color: 'var(--gold)', label: t('firstPlace') },
                     2: { icon: Medal, color: 'var(--silver)', label: t('secondPlace') },
                     3: { icon: Medal, color: 'var(--bronze)', label: t('thirdPlace') },
-                  }[result.rank] || { icon: Award, color: 'var(--text-muted)', label: `Rank #${result.rank}` };
-
+                  };
+                  const rankIcons = rankIconsMap[result.rank] || { icon: Award, color: 'var(--text-muted)', label: `Rank #${result.rank}` };
                   const RankIcon = rankIcons.icon;
 
                   return (
@@ -740,8 +784,8 @@ export default async function HomePage() {
               gap: '2rem',
             }}
           >
-            {astra?.categories.map((cat) => {
-              const terraCat = terra?.categories.find((c) => c.slug === cat.slug);
+            {(astra?.categories || []).map((cat: any) => {
+              const terraCat = (terra?.categories || []).find((c: any) => c.slug === cat.slug);
               const astraCatPts = cat.points;
               const terraCatPts = terraCat?.points || 0;
               const catTotal = astraCatPts + terraCatPts;
