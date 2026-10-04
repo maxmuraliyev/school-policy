@@ -11,11 +11,16 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AnnouncementsPage() {
-  const announcements = await prisma.announcement.findMany({
-    where: { status: 'PUBLISHED' },
-    include: { house: true },
-    orderBy: [{ isPinned: 'desc' }, { publishedAt: 'desc' }],
-  });
+  let announcements: any[] = [];
+  try {
+    announcements = await prisma.announcement.findMany({
+      where: { status: 'PUBLISHED' },
+      include: { house: true },
+      orderBy: [{ isPinned: 'desc' }, { publishedAt: 'desc' }],
+    });
+  } catch (err) {
+    console.error('Announcements fetch error:', err);
+  }
 
   return (
     <div className="container" style={{ padding: '3rem 1.5rem 5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
